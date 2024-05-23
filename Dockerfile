@@ -38,6 +38,11 @@ RUN git clone https://github.com/pkicki/mushroom-rl.git && \
     cd mushroom-rl && \
     git checkout ePPO && \
     pip install --no-use-pep517 -e .
+
+RUN git clone https://github.com/mmcza/rotorpy.git && \
+    cd rotorpy && \
+    pip install -e .
      
 RUN pip install hiyapyco imageio mujoco dm_control wandb hydra urdf_parser_py mp-pytorch \
-                protobuf==4.23.0 torch opencv-python scikit-learn pygame matplotlib experiment_launcher
+                protobuf==4.23.0 torch opencv-python scikit-learn pygame matplotlib experiment_launcher \
+                stable_baselines3

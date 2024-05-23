@@ -8,7 +8,6 @@ from storm_kit.differentiable_robot_model.differentiable_robot_model import Diff
 
 from spline_rl.utils.utils import equality_loss, huber, limit_loss
 
-
 class Constraint:
     def __init__(self) -> None:
         pass
@@ -59,7 +58,6 @@ class AirHockeyConstraints(Constraint):
         constraint_losses = torch.cat([q_dot_loss, q_ddot_loss, x_ee_loss_low, y_ee_loss_low,
                                         y_ee_loss_high, z_ee_loss], dim=-1)
         return constraint_losses
-
 
 class KinodynamicCupConstraints(Constraint):
     def __init__(self, q_max, q_dot_max, q_ddot_max, torque_max, cup_width, cup_height, robot_radius,
@@ -186,4 +184,27 @@ class KinodynamicCupConstraints(Constraint):
 
         constraint_losses = torch.cat([q_loss, q_dot_loss, q_ddot_loss,
                                        q_torque_loss, orientation_loss, collision_loss], dim=-1)
+        return constraint_losses
+
+class WallHittingDroneContraints(Constraint):
+    def __init__(self, q_dot_max, rotor_speeds_max) -> None:
+        self.q_dot_max = q_dot_max
+        self.rotor_speeds_max = rotor_speeds_max
+        self.violation_limits = np.array([1e-4] * 6 + [1e-5] * 4)
+        self.constraints_num = 10
+
+    def evaluate(self, q_dot, dt):
+        # TODO: make this shape adaptation more general and not hardcoded
+        dt_ = dt[..., None]
+        # Prepare the constraint limits tensors
+        q_dot_limits = torch.Tensor(self.q_dot_max)[None, None]
+        q_dot_loss = limit_loss(torch.abs(q_dot), dt_, q_dot_limits)
+
+        # 
+        # rotor_speed_limit = torch.Tensor(self.rotor_speeds_max)[None, None]
+        # rotor_speed_loss = limit_loss(torch.abs(rotors_speed), dt_, rotors_speed_limits)
+        # constraint_losses = torch.cat([q_dot_loss, rotor_speed_loss], dim=-1)
+
+        constraint_losses = torch.cat([q_dot_loss], dim=-1)
+
         return constraint_losses
