@@ -187,9 +187,9 @@ class KinodynamicCupConstraints(Constraint):
         return constraint_losses
 
 class WallHittingDroneContraints(Constraint):
-    def __init__(self, q_dot_max, rotor_speeds_max) -> None:
+    def __init__(self, q_dot_max, rotor_speed_max) -> None:
         self.q_dot_max = q_dot_max
-        self.rotor_speeds_max = rotor_speeds_max
+        self.rotor_speed_max = rotor_speed_max
         self.violation_limits = np.array([1e-4] * 6 + [1e-5] * 4)
         self.constraints_num = 10
 
@@ -200,8 +200,8 @@ class WallHittingDroneContraints(Constraint):
         q_dot_limits = torch.Tensor(self.q_dot_max)[None, None]
         q_dot_loss = limit_loss(torch.abs(q_dot), dt_, q_dot_limits)
 
-        # 
-        # rotor_speed_limit = torch.Tensor(self.rotor_speeds_max)[None, None]
+        # TODO: Find a way to calculate rotor's speed or thrust for each propeller
+        # rotor_speed_limit = torch.Tensor(self.rotor_speed_max)[None, None]
         # rotor_speed_loss = limit_loss(torch.abs(rotors_speed), dt_, rotors_speed_limits)
         # constraint_losses = torch.cat([q_dot_loss, rotor_speed_loss], dim=-1)
 
