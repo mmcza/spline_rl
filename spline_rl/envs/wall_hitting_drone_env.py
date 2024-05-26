@@ -40,7 +40,7 @@ class WallHittingDroneEnv():
                        imu = None,
                        mocap = None,
                        estimator = None,
-                       world = World.empty((-5, 5, -5, 5, -5, 5)),
+                       world = World.empty((-10., 10., -10., 10., -0.5, 10.)),
                        safety_margin = 0.25):
 
         self.env_info = dict()
