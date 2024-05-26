@@ -104,7 +104,7 @@ class WallHittingDroneEnvGym(Environment):
     def end_reward(self, observation, action, weights = {'pitch': 1, 'pitch_dot': 1, 'z_dot': 1, 'x_dot': 1}):
         r = 0
         if not self.reward_given:
-            if abs(observation[0]) < 0.01:
+            if abs(observation[0] - 5.0) < 0.05:
                 self.reward_given = True
                 roll, pitch, yaw = euler_from_quaternion(observation[6:10])
                 pitch_dot = observation[11]
