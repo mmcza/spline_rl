@@ -1,5 +1,6 @@
 from spline_rl.policy.bsmp_policy_kino import BSMPPolicyKino
 from spline_rl.utils.kino_network import KinoConfigurationTimeNetworkWrapper, KinoLogSigmaNetworkWrapper
+from spline_rl.utils.wall_hitting_drone_network import WallHittingDroneConfigurationTimeNetworkWrapper, WallHittingDroneLogSigmaNetworkWrapper
 import torch
 
 from mushroom_rl.approximators import Regressor
@@ -12,6 +13,7 @@ from spline_rl.policy.prodmp_policy import ProDMPPolicy
 from spline_rl.policy.promp_policy import ProMPPolicy
 from spline_rl.algorithm.bsmp_eppo import BSMPePPO
 from spline_rl.policy.bsmp_policy_stop import BSMPPolicyStop
+from spline_rl.policy.bsmp_policy_drone import BSMPPolicyWallHittingDrone
 from spline_rl.utils.context_builder import IdentityContextBuilder
 from spline_rl.utils.network import ConfigurationNetworkWrapper, ConfigurationTimeNetworkWrapper, LogSigmaNetworkWrapper
 from spline_rl.utils.value_network import ValueNetwork
@@ -40,6 +42,8 @@ def agent_builder(env_info, agent_params):
         agent = build_agent_BSMPePPO(env_info, eppo_params, agent_params)
     elif alg == "bsmp_eppo_kinodynamic":
         agent = build_agent_BSMPePPO(env_info, eppo_params, agent_params)
+    elif alg == "bsmp_eppo_wall_hitting_drone":
+        agent = build_agent_BSMPePPO(env_info, eppo_params, agent_params)
     elif alg.startswith("pro"):
         agent = build_agent_ProMPePPO(env_info, eppo_params, agent_params)
     else:
@@ -66,6 +70,7 @@ def build_agent_BSMPePPO(env_info, eppo_params, agent_params):
 
 
     mdp_info = env_info['rl_info']
+    print(mdp_info)
 
     sigma_q = agent_params["sigma_init_q"] * torch.ones((n_trainable_q_pts, n_dim))
     sigma_t = agent_params["sigma_init_t"] * torch.ones((n_trainable_t_pts))
@@ -74,6 +79,9 @@ def build_agent_BSMPePPO(env_info, eppo_params, agent_params):
     if "kinodynamic" in agent_params["alg"]:
         mu_network = KinoConfigurationTimeNetworkWrapper
         logsigma_network = KinoLogSigmaNetworkWrapper
+    elif "drone" in agent_params["alg"]:
+        mu_network = WallHittingDroneConfigurationTimeNetworkWrapper
+        logsigma_network = WallHittingDroneLogSigmaNetworkWrapper
     else:
         mu_network = ConfigurationTimeNetworkWrapper
         logsigma_network = LogSigmaNetworkWrapper
@@ -119,6 +127,8 @@ def build_agent_BSMPePPO(env_info, eppo_params, agent_params):
         policy = BSMPPolicyStop(**policy_args)
     elif agent_params["alg"] == "bsmp_eppo_kinodynamic":
         policy = BSMPPolicyKino(**policy_args)
+    elif agent_params["alg"] == "bsmp_eppo_wall_hitting_drone":
+        policy = BSMPPolicyWallHittingDrone(**policy_args)
     else:
         policy = BSMPPolicy(**policy_args)
 
@@ -134,6 +144,7 @@ def build_agent_BSMPePPO(env_info, eppo_params, agent_params):
 def build_agent_ProMPePPO(env_info, eppo_params, agent_params):
     n_trainable_pts = agent_params["n_dim"] * (agent_params["n_q_cps"] - 1)
     mdp_info = env_info['rl_info']
+    print(mdp_info)
 
     sigma = agent_params["sigma_init_q"] * torch.ones(n_trainable_pts + 1)
 

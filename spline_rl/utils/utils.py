@@ -80,7 +80,17 @@ def unpack_data_kinodynamic(x):
     dqk = z
     ddqk = z
     return q0, qk, dq0, dqk, ddq0, ddqk
-    
+
+def unpack_data_drone(x):
+    n = 6
+    q0 = x[..., :n]
+    dq0 = x[..., n:2*n]
+    ddq0 = x[..., 2*n:3*n]
+    qk = x[..., 3*n:4*n]
+    dqk = x[..., 4*n:5*n]
+    ddqk = x[..., 5*n:6*n]
+    return q0, qk, dq0, dqk, ddq0, ddqk
+
 def project_entropy(chol, e_lb):
     a_dim = chol.size()[-1]
     def entropy(chol):

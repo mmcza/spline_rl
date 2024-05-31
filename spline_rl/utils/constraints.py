@@ -187,16 +187,18 @@ class KinodynamicCupConstraints(Constraint):
         return constraint_losses
 
 class WallHittingDroneContraints(Constraint):
-    def __init__(self, q_dot_max, rotor_speed_max) -> None:
+    def __init__(self, q_dot_max) -> None:
+        self.q_max = np.array([10, 10, 10])
         self.q_dot_max = q_dot_max
-        self.rotor_speed_max = rotor_speed_max
-        self.violation_limits = np.array([1e-4] * 6 + [1e-5] * 4)
-        self.constraints_num = 10
+        self.violation_limits = np.array([1e-4] * 3 + [1e-4] * 6)
+        self.constraints_num = 9
 
-    def evaluate(self, q_dot, dt):
+    def evaluate(self, q, q_dot, q_ddot, dt):
         # TODO: make this shape adaptation more general and not hardcoded
         dt_ = dt[..., None]
         # Prepare the constraint limits tensors
+        q_limits = torch.Tensor(self.q_max)[None, None]
+        q_loss = limit_loss(torch.abs(q), dt_, q_limits)
         q_dot_limits = torch.Tensor(self.q_dot_max)[None, None]
         q_dot_loss = limit_loss(torch.abs(q_dot), dt_, q_dot_limits)
 
@@ -205,6 +207,6 @@ class WallHittingDroneContraints(Constraint):
         # rotor_speed_loss = limit_loss(torch.abs(rotors_speed), dt_, rotors_speed_limits)
         # constraint_losses = torch.cat([q_dot_loss, rotor_speed_loss], dim=-1)
 
-        constraint_losses = torch.cat([q_dot_loss], dim=-1)
+        constraint_losses = torch.cat([q_loss, q_dot_loss], dim=-1)
 
         return constraint_losses

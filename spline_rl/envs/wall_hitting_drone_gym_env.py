@@ -21,12 +21,12 @@ from rotorpy.controllers.quadrotor_control import SE3Control
 from rotorpy.learning.quadrotor_environments import QuadrotorEnv
 from rotorpy.world import World
 import math
-
+from spline_rl.utils.constraints import WallHittingDroneContraints
 
 gym.logger.set_level(40)
 
 class WallHittingDroneEnvGym(Environment):
-    def __init__(self, name, horizon=None, gamma=0.99, headless = False, wrappers=None, wrappers_args=None,
+    def __init__(self, horizon=None, gamma=0.99, headless = False, wrappers=None, wrappers_args=None,
                  **env_args):
         """
         Constructor.
@@ -61,14 +61,15 @@ class WallHittingDroneEnvGym(Environment):
         
         world = World(world_map)
 
-        env = gym.make("Quadrotor-v0", 
+        self.env = gym.make("Quadrotor-v0", 
                         control_mode ='cmd_motor_speeds', 
                         reward_fn = self.end_reward,
                         quad_params = quad_params,
                         max_time = 5,
                         world = world,
                         sim_rate = 100,
-                        render_mode='rgb_array',
+                        #render_mode='rgb_array',
+                        render_mode = None,
                         render_fps=30)
         
         if wrappers is not None:
@@ -92,11 +93,26 @@ class WallHittingDroneEnvGym(Environment):
         observation_space = self._convert_gym_space(self.env.observation_space)
         mdp_info = MDPInfo(observation_space, action_space, gamma, horizon, dt)
 
+
         # Drone Controller
         self.controller = SE3Control(quad_params)
 
         # Flag to only give the reward once - at the moment of hitting wall
         self.reward_given = False
+
+        self.constraints = WallHittingDroneContraints(q_dot_max= np.array([100]*6))
+
+        interpolation_order = 5
+
+        self.env_info = dict()
+        # self.env_info['rl_info'] = mdp_info
+        self.env_info['dt'] = dt
+        self.env_info['rl_info'] = dict()
+        self.env_info['rl_info']['observation_space'] = observation_space
+        #self.env_info['rl_info']['constraints'] = dict()
+        self.env_info['rl_info']['constraints'] = self.constraints
+        self.env_info['rl_info']['interpolation_order'] = interpolation_order
+        #self.env_info['rl_info']['constraints']['constraints_num'] = 9
 
         super().__init__(mdp_info)
 
