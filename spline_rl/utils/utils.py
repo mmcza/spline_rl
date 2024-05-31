@@ -85,10 +85,15 @@ def unpack_data_drone(x):
     n = 6
     q0 = x[..., :n]
     dq0 = x[..., n:2*n]
-    ddq0 = x[..., 2*n:3*n]
-    qk = x[..., 3*n:4*n]
-    dqk = x[..., 4*n:5*n]
-    ddqk = x[..., 5*n:6*n]
+    z = torch.zeros_like(dq0) if isinstance(dq0, torch.Tensor) else np.zeros_like(dq0)
+    ddq0 = z
+    qk = z
+    dqk = z
+    ddqk = z
+    #ddq0 = x[..., 2*n:3*n]
+    #qk = x[..., 3*n:4*n]
+    #dqk = x[..., 4*n:5*n]
+    #ddqk = x[..., 5*n:6*n]
     return q0, qk, dq0, dqk, ddq0, ddqk
 
 def project_entropy(chol, e_lb):

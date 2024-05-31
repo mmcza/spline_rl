@@ -5,6 +5,7 @@ import numpy as np
 from mushroom_rl.algorithms.policy_search import ePPO
 from mushroom_rl.utils.minibatches import minibatch_generator
 from storm_kit.differentiable_robot_model import DifferentiableRobotModel
+from spline_rl.utils.constraints import WallHittingDroneContraints
 
 
 class BSMPePPO(ePPO):
@@ -19,7 +20,9 @@ class BSMPePPO(ePPO):
 
     def __init__(self, mdp_info, distribution, policy, optimizer, value_function, value_function_optimizer,
                  constraint_lr, n_epochs_policy, batch_size, eps_ppo, ent_coeff=0., context_builder=None): 
-        self.alphas = np.array([0.] * mdp_info.constraints.constraints_num)
+        #self.alphas = np.array([0.] * mdp_info.constraints.constraints_num)
+        self.constraints = WallHittingDroneContraints(q_dot_max= np.array([25]*6))
+        self.alphas = np.array([0.] * self.constraints.constraints_num)
         self.constraint_lr = constraint_lr
         self.constraint_losses = []
         self.scaled_constraint_losses = []
@@ -42,7 +45,7 @@ class BSMPePPO(ePPO):
         self._t = None
         self._ee_pos = None
 
-        self.load_constraints(mdp_info)
+        #self.load_constraints(mdp_info)
 
         super().__init__(mdp_info, distribution, policy, optimizer, n_epochs_policy,
                          batch_size, eps_ppo, ent_coeff, context_builder)
@@ -69,10 +72,11 @@ class BSMPePPO(ePPO):
 
     def draw_action(self, state, policy_state=None):
         action, policy_state = super().draw_action(state, policy_state)
-        if self.mdp_info.interpolation_order in [1, 2]:
-            action = action[:1]
-        elif self.mdp_info.interpolation_order in [-1, 3, 4]:
-            action = action[:2]
+        # if self.mdp_info.interpolation_order in [1, 2]:
+        #     action = action[:1]
+        # elif self.mdp_info.interpolation_order in [-1, 3, 4]:
+        #     action = action[:2]
+        action = action[:2]
         return action, policy_state
 
     def _unpack_qt(self, qt, trainable=False):

@@ -78,6 +78,7 @@ class BSMPPolicyWallHittingDrone(Policy):
         if context is None:
             raise NotImplementedError
         else:
+            print(context)
             q_0, q_d, q_dot_0, q_dot_d, q_ddot_0, q_ddot_d= unpack_data_drone(torch.tensor(context))
         return q_0[:, None], q_d[:, None], q_dot_0[:, None], q_dot_d[:, None], q_ddot_0[:, None], q_ddot_d[:, None]
 
@@ -89,12 +90,14 @@ class BSMPPolicyWallHittingDrone(Policy):
 
         #q_d = q_0
 
+
         q1, q2, qm2, qm1 = self.compute_boundary_control_points_exp(trainable_t_cps, q_0, q_dot_0, q_ddot_0,
                                                                     q_d, q_dot_d, q_ddot_d)
         q_begin = [q_0, q1, q2]
         q_end = [q_d, qm1, qm2]
 
         s = torch.linspace(0., 1., trainable_q_pts.shape[1]+6)[None, 3:-3, None]
+
         q_b = q_0 * (1 - s) + q_d * s
         q_cps = torch.cat(q_begin[:self._n_pts_fixed_begin] + [q_b + trainable_q_pts] + q_end[::-1], axis=-2)
 

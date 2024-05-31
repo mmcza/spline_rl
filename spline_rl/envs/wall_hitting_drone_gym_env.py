@@ -101,17 +101,18 @@ class WallHittingDroneEnvGym(Environment):
         self.reward_given = False
 
         self.constraints = WallHittingDroneContraints(q_dot_max= np.array([100]*6))
+        self.state = None
 
         interpolation_order = 5
 
         self.env_info = dict()
-        # self.env_info['rl_info'] = mdp_info
+        self.env_info['rl_info'] = mdp_info
         self.env_info['dt'] = dt
-        self.env_info['rl_info'] = dict()
-        self.env_info['rl_info']['observation_space'] = observation_space
+        #self.env_info['rl_info'] = dict()
+        #self.env_info['rl_info']['observation_space'] = observation_space
         #self.env_info['rl_info']['constraints'] = dict()
-        self.env_info['rl_info']['constraints'] = self.constraints
-        self.env_info['rl_info']['interpolation_order'] = interpolation_order
+        #self.env_info['rl_info']['constraints'] = self.constraints
+        #self.env_info['rl_info']['interpolation_order'] = interpolation_order
         #self.env_info['rl_info']['constraints']['constraints_num'] = 9
 
         super().__init__(mdp_info)
@@ -120,7 +121,7 @@ class WallHittingDroneEnvGym(Environment):
     def end_reward(self, observation, action, weights = {'pitch': 1, 'pitch_dot': 1, 'z_dot': 1, 'x_dot': 1}):
         r = 0
         if not self.reward_given:
-            if abs(observation[0] - 5.0) < 0.05:
+            if abs(observation[0] + 5.0) < 0.05:
                 self.reward_given = True
                 roll, pitch, yaw = euler_from_quaternion(observation[6:10])
                 pitch_dot = observation[11]
@@ -139,20 +140,28 @@ class WallHittingDroneEnvGym(Environment):
         self.reward_given = False
         if state is None:
             state, info = self.env.reset()
+            self.state = state
             return np.atleast_1d(state), info
         else:
             _, info = self.env.reset()
             self.env.state = state
+            self.state = state
 
             return np.atleast_1d(state), info
 
     def _convert_action(self, action):
-        state = {'x': self.env.state[0:3], 'v': self.env.state[3:6],
-                 'q': self.env.state[6:10], 'w': self.env.state[10:]}
+        obs = self.state
+        state = {'x': obs[0:3], 'v': obs[3:6],
+                 'q': obs[6:10], 'w': obs[10:14]}
+        print(state)
+        print(action)
 
         # The line below is if action is like this: [x, x_dot, x_ddot]
-        flat = {'x': action[0:3], 'x_dot': action[6:9], 'x_ddot': action[12:15],
-                'x_dddot': [0, 0, 0], 'yaw': action[5], 'yaw_dot': action[11], 'yaw_ddot': action[17]}
+        # flat = {'x': action[0, 0:3], 'x_dot': action[1, 0:3], 'x_ddot': action[2, 0:3],
+        #         'x_dddot': [0, 0, 0], 'yaw': action[0, 5], 'yaw_dot': action[1, 5], 'yaw_ddot': action[2, 5]}
+
+        flat = {'x': action[0, 0:3], 'x_dot': action[1, 0:3], 'x_ddot': np.array([0, 0, 0]),
+                'x_dddot': [0, 0, 0], 'yaw': action[0, 5], 'yaw_dot': action[1, 5], 'yaw_ddot': np.array([0])}        
 
         # If action is x, x_dot, x_ddot, t, dt
         # x, x_dot, x_ddot, t, dt = action
@@ -161,15 +170,16 @@ class WallHittingDroneEnvGym(Environment):
 
         # If there is no good way to get time than we can set t to 0
         t = 0
-        control_dict = controller.update(t, state, flat)
+        control_dict = self.controller.update(t, state, flat)
         cmd_motor_speeds = control_dict['cmd_motor_speeds']
-        action_ = np.interp(cmd_motor_speeds, [env.unwrapped.rotor_speed_min, env.unwrapped.rotor_speed_max], [-1,1])
+        action_ = np.interp(cmd_motor_speeds, [self.env.unwrapped.rotor_speed_min, self.env.unwrapped.rotor_speed_max], [-1,1])
         return action_
 
 
     def step(self, action):
         action = self._convert_action(action)
         obs, reward, absorbing, _, info = self.env.step(action) #truncated flag is ignored 
+        self.state = obs
 
         return np.atleast_1d(obs), reward, absorbing, info
 
