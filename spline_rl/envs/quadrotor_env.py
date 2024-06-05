@@ -188,7 +188,7 @@ class QuadrotorEnv(gym.Env):
             # Close the plots
             plt.close('all')
     
-    def reset(self, seed=None, initial_state='random', options={'pos_bound': 2, 'vel_bound': 0}):
+    def reset(self, seed=None, initial_state='random', options={'pos_bound': 2, 'vel_bound': 0.5}):
         """
         Reset the environment
         Inputs:

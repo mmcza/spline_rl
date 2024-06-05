@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from datetime import datetime
+from rotorpy.world import World
 
 from rotorpy.vehicles.crazyflie_params import quad_params  # Import quad params for the quadrotor environment.
 
@@ -41,8 +42,10 @@ from stable_baselines3.ppo.policies import MlpPolicy                # The policy
 
 num_cpu = 4   # for parallelization
 
-# Choose the weights for our reward function. Here we are creating a lambda function over hover_reward.
-reward_function = lambda obs, act: hover_reward(obs, act, weights={'x': 1, 'v': 0.1, 'w': 0, 'u': 1e-5})
+world_map = {"bounds": {"extents": [-10., 10., -10., 10., -0.5, 10.]},
+        "blocks": [{"extents": [-5, -5.5, -10., 10., -0.5, 10.], "color": [1, 0, 0]}]}
+        
+world = World(world_map)
 
 # Make the environment. For this demo we'll train a policy to command collective thrust and body rates.
 # Turning render_mode="None" will make the training run much faster, as visualization is a current bottleneck. 
@@ -50,7 +53,7 @@ env = gym.make("Quadrotor-v0",
                 control_mode ='cmd_motor_speeds', 
                 quad_params = quad_params,
                 max_time = 5,
-                world = None,
+                world = world,
                 sim_rate = 100,
                 #render_mode='None')
                 render_mode='3D')
