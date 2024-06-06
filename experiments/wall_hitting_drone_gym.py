@@ -4,17 +4,13 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime
 from rotorpy.world import World
-
-from rotorpy.vehicles.crazyflie_params import quad_params  
-
-# Import the QuadrotorEnv gymnasium environment using the following command.
+from rotorpy.vehicles.crazyflie_params import quad_params
 from rotorpy.learning.quadrotor_environments import QuadrotorEnv
-
-# Reward functions can be specified by the user, or we can import from existing reward functions.
 from rotorpy.learning.quadrotor_reward_functions import hover_reward
 from stable_baselines3 import PPO
 from stable_baselines3.ppo.policies import MlpPolicy
-from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold
+from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.monitor import Monitor
 import torch
 
 """
@@ -27,32 +23,22 @@ Training can be tracked using tensorboard, e.g. tensorboard --logdir=<log_dir>
 
 """
 
-# First we'll set up some directories for saving the policy and logs.
-models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "rotorpy", "learning", "policies")
-log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "rotorpy", "learning", "logs")
-if not os.path.exists(models_dir):
-    os.makedirs(models_dir)
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+models_dir = os.path.join(current_dir, "..", "rotorpy", "learning", "policies")
+log_dir = os.path.join(current_dir, "..", "rotorpy", "learning", "logs")
+tensorboard_log_dir = os.path.join(log_dir, "tensorboard")
 
-# Next import Stable Baselines.
-try:
-    import stable_baselines3
-except:
-    raise ImportError('To run this example you must have Stable Baselines installed via pip install stable_baselines3')
+os.makedirs(models_dir, exist_ok=True)
+os.makedirs(log_dir, exist_ok=True)
+os.makedirs(tensorboard_log_dir, exist_ok=True)
 
-from stable_baselines3 import PPO                                   # We'll use PPO for training.
-from stable_baselines3.ppo.policies import MlpPolicy                # The policy will be represented by an MLP
-
-num_cpu = 4   # for parallelization
-
-world_map = {"bounds": {"extents": [-10., 10., -10., 10., -0.5, 10.]},
-        "blocks": [{"extents": [-5, -5.5, -10., 10., -0.5, 10.], "color": [1, 0, 0]}]}
-        
+# Set world map for the environment
+world_map = {
+    "bounds": {"extents": [-10., 10., -10., 10., -0.5, 10.]},
+    "blocks": [{"extents": [-5, -5.5, -10., 10., -0.5, 10.], "color": [1, 0, 0]}]
+}
 world = World(world_map)
 
-# Make the environment. For this demo we'll train a policy to command collective thrust and body rates.
-# Turning render_mode="None" will make the training run much faster, as visualization is a current bottleneck. 
 # Initialize the environment
 env = gym.make("Quadrotor-v0",
                control_mode='cmd_motor_speeds',
@@ -66,7 +52,6 @@ env = gym.make("Quadrotor-v0",
 observation, info = env.reset(initial_state='random', options={'pos_bound': 2, 'vel_bound': 0})
 
 # Create a new PPO model
-tensorboard_log_dir = os.path.join(log_dir, "tensorboard")
 model = PPO(MlpPolicy, env, verbose=1, ent_coef=0.01, tensorboard_log=tensorboard_log_dir)
 
 # Training parameters
@@ -76,13 +61,13 @@ start_time = datetime.now()
 epoch_count = 0
 
 # Evaluation callback setup
-eval_env = gym.make("Quadrotor-v0",
-                    control_mode='cmd_motor_speeds',
-                    quad_params=quad_params,
-                    max_time=5,
-                    world=world,
-                    sim_rate=100,
-                    render_mode='None')
+eval_env = Monitor(gym.make("Quadrotor-v0",
+                            control_mode='cmd_motor_speeds',
+                            quad_params=quad_params,
+                            max_time=5,
+                            world=world,
+                            sim_rate=100,
+                            render_mode='None'))
 
 eval_callback = EvalCallback(eval_env, best_model_save_path=models_dir,
                              log_path=log_dir, eval_freq=5000,
@@ -90,6 +75,7 @@ eval_callback = EvalCallback(eval_env, best_model_save_path=models_dir,
 
 # Training loop with visualization and monitoring
 try:
+    all_rewards = []
     while epoch_count < num_epochs:
         # Train the model
         model.learn(total_timesteps=num_timesteps, reset_num_timesteps=False,
@@ -102,7 +88,7 @@ try:
         model.save(model_path)
 
         # Evaluate the model
-        obs = eval_env.reset()
+        obs, _ = eval_env.reset()
         done = False
         rewards = []
         while not done:
@@ -111,6 +97,9 @@ try:
             rewards.append(reward)
 
         epoch_count += 1
+        all_rewards.append(np.sum(rewards))
+
+        # Plotting results for the current epoch
         plt.plot(range(len(rewards)), rewards)
         plt.xlabel('Steps')
         plt.ylabel('Reward')
@@ -123,8 +112,9 @@ except KeyboardInterrupt:
     model.save(os.path.join(models_dir, "PPO", f"interrupt_{start_time.strftime('%H-%M-%S')}"))
 
 # Plot overall training rewards
-plt.plot(range(epoch_count), rewards)
+plt.figure()
+plt.plot(range(1, epoch_count + 1), all_rewards)
 plt.xlabel('Epoch')
-plt.ylabel('Reward')
-plt.title('Training Reward Over Time')
+plt.ylabel('Total Reward')
+plt.title('Total Training Reward Over Epochs')
 plt.show()
