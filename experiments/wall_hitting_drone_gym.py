@@ -49,17 +49,13 @@ world = World(world_map)
 
 # Make the environment. For this demo we'll train a policy to command collective thrust and body rates.
 # Turning render_mode="None" will make the training run much faster, as visualization is a current bottleneck. 
-env = gym.make("Quadrotor-v0", 
-                control_mode ='cmd_motor_speeds', 
-                quad_params = quad_params,
-                max_time = 5,
-                world = world,
-                sim_rate = 100,
-                #render_mode='None')
-                render_mode='3D')
-
-# from stable_baselines3.common.env_checker import check_env
-# check_env(env, warn=True)  # you can check the environment using built-in tools
+env = gym.make("Quadrotor-v0",
+               control_mode='cmd_motor_speeds',
+               quad_params=quad_params,
+               max_time=5,
+               world=world,
+               sim_rate=100,
+               render_mode='3D')
 
 # Reset the environment
 observation, info = env.reset(initial_state='random', options={'pos_bound': 2, 'vel_bound': 0})
@@ -67,19 +63,37 @@ observation, info = env.reset(initial_state='random', options={'pos_bound': 2, '
 # Create a new model
 model = PPO(MlpPolicy, env, verbose=1, ent_coef=0.01, tensorboard_log=log_dir)
 
-# Training... 
+# Training parameters
 num_timesteps = 20_000
 num_epochs = 10
-
 start_time = datetime.now()
-
 epoch_count = 0
-while True:  # Run indefinitely..
 
-    # This line will run num_timesteps for training and log the results every so often.
+# Training loop with visualization
+while epoch_count < num_epochs:  # Run for a fixed number of epochs
+    # Train the model
     model.learn(total_timesteps=num_timesteps, reset_num_timesteps=False, tb_log_name="PPO-Quad_cmd-motor_"+start_time.strftime('%H-%M-%S'))
 
     # Save the model
-    model.save(f"{models_dir}/PPO/{start_time.strftime('%H-%M-%S')}/hover_{num_timesteps*(epoch_count+1)}")
+    model_path = f"{models_dir}/PPO/{start_time.strftime('%H-%M-%S')}/hover_{num_timesteps*(epoch_count+1)}"
+    model.save(model_path)
+
+    # Evaluate the model
+    obs = env.reset()
+    done = False
+    while not done:
+        action, _states = model.predict(obs, deterministic=True)
+        obs, rewards, done, info = env.step(action)
 
     epoch_count += 1
+
+    # Plotting results
+    env.render()  # Show the environment state
+    print(f"Epoch {epoch_count}/{num_epochs} completed, model saved to {model_path}")
+
+# Additional visualizations
+plt.plot(range(epoch_count), rewards)
+plt.xlabel('Epoch')
+plt.ylabel('Reward')
+plt.title('Training Reward Over Time')
+plt.show()
