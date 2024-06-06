@@ -53,6 +53,7 @@ world = World(world_map)
 
 # Make the environment. For this demo we'll train a policy to command collective thrust and body rates.
 # Turning render_mode="None" will make the training run much faster, as visualization is a current bottleneck. 
+# Initialize the environment
 env = gym.make("Quadrotor-v0",
                control_mode='cmd_motor_speeds',
                quad_params=quad_params,
@@ -61,10 +62,11 @@ env = gym.make("Quadrotor-v0",
                sim_rate=100,
                render_mode='3D')
 
-# Reset the environment
+# Reset the environment with initial conditions
 observation, info = env.reset(initial_state='random', options={'pos_bound': 2, 'vel_bound': 0})
 
-# Create a new model
+# Create a new PPO model
+tensorboard_log_dir = os.path.join(log_dir, "tensorboard")
 model = PPO(MlpPolicy, env, verbose=1, ent_coef=0.01, tensorboard_log=tensorboard_log_dir)
 
 # Training parameters
@@ -73,7 +75,7 @@ num_epochs = 10
 start_time = datetime.now()
 epoch_count = 0
 
-# Evaluation callback
+# Evaluation callback setup
 eval_env = gym.make("Quadrotor-v0",
                     control_mode='cmd_motor_speeds',
                     quad_params=quad_params,
@@ -88,14 +90,15 @@ eval_callback = EvalCallback(eval_env, best_model_save_path=models_dir,
 
 # Training loop with visualization and monitoring
 try:
-    while epoch_count < num_epochs:  
+    while epoch_count < num_epochs:
         # Train the model
         model.learn(total_timesteps=num_timesteps, reset_num_timesteps=False,
                     tb_log_name="PPO-Quad_cmd-motor_" + start_time.strftime('%H-%M-%S'),
                     callback=eval_callback)
 
         # Save the model
-        model_path = f"{models_dir}/PPO/{start_time.strftime('%H-%M-%S')}/hover_{num_timesteps*(epoch_count+1)}"
+        model_path = os.path.join(models_dir, "PPO", start_time.strftime('%H-%M-%S'), f"hover_{num_timesteps*(epoch_count+1)}")
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
         model.save(model_path)
 
         # Evaluate the model
@@ -108,8 +111,6 @@ try:
             rewards.append(reward)
 
         epoch_count += 1
-
-        # Plotting results
         plt.plot(range(len(rewards)), rewards)
         plt.xlabel('Steps')
         plt.ylabel('Reward')
@@ -119,8 +120,9 @@ try:
 
 except KeyboardInterrupt:
     print("Training interrupted. Saving model...")
-    model.save(f"{models_dir}/PPO/interrupt_{start_time.strftime('%H-%M-%S')}")
+    model.save(os.path.join(models_dir, "PPO", f"interrupt_{start_time.strftime('%H-%M-%S')}"))
 
+# Plot overall training rewards
 plt.plot(range(epoch_count), rewards)
 plt.xlabel('Epoch')
 plt.ylabel('Reward')
