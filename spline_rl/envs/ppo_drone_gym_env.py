@@ -95,59 +95,58 @@ class Wall_Hitting_Drone_Env(gym.Env):
         else: 
             return -np.exp(5.0 - state[0]) * 0.001
 
-
 class PolicyNetwork(nn.Module):
     def __init__(self, state_dim, action_dim):
-        super(PolicyNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.mean = nn.Linear(128, action_dim)
-        self.log_std = nn.Parameter(torch.zeros(action_dim))
+        super(PolicyNetwork, self).__init__()   # Initialize policy network 
+        self.fc1 = nn.Linear(state_dim, 128)  # First fully connected layer
+        self.fc2 = nn.Linear(128, 128)  # Second fully connected layer
+        self.mean = nn.Linear(128, action_dim)  # Mean layer for the action distribution
+        self.log_std = nn.Parameter(torch.zeros(action_dim))  # Log standard deviation parameter
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        mean = self.mean(x)
+        x = torch.relu(self.fc1(x))  # ReLU activation on first layer
+        x = torch.relu(self.fc2(x))  # ReLU activation on second layer
+        mean = self.mean(x)  # Output mean of the action distribution
         return mean
 
 
 class ValueNetwork(nn.Module):
     def __init__(self, state_dim):
         super(ValueNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(state_dim, 128)  # First fully connected layer
+        self.fc2 = nn.Linear(128, 128)  # Second fully connected layer
+        self.fc3 = nn.Linear(128, 1)  # Final fully connected layer for value estimation
         
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        value = self.fc3(x)
-        return value.view(-1, 1)
-
 class PPOAgent:
     def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.99, eps_clip=0.2, k_epochs=10):
-        self.policy = PolicyNetwork(state_dim, action_dim)
-        self.policy_old = PolicyNetwork(state_dim, action_dim)
-        self.policy_old.load_state_dict(self.policy.state_dict())
-        self.value = ValueNetwork(state_dim)
+         # Policy network initialization
+        self.policy = PolicyNetwork(state_dim, action_dim)  # Initialize policy network
+        self.policy_old = PolicyNetwork(state_dim, action_dim)  # Initialize old policy network
+        self.policy_old.load_state_dict(self.policy.state_dict())  # Load policy parameters into the old policy
+        self.value = ValueNetwork(state_dim)  # Initialize value network
         
+        # Optimizers for policy and value networks
         self.optimizer_policy = optim.Adam(self.policy.parameters(), lr=lr)
         self.optimizer_value = optim.Adam(self.value.parameters(), lr=lr)
         
+        # Loss function (Mean Squared Error)
         self.loss_fn = nn.MSELoss()
+        
+        # PPO parameters
         self.gamma = gamma
         self.eps_clip = eps_clip
         self.k_epochs = k_epochs
 
     def select_action(self, state):
+          # Flatten and convert state to tensor
         state = torch.tensor(self._flatten_state(state).clone().detach(), dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():
-            mean = self.policy_old(state)
-            log_std = self.policy_old.log_std
-            std = torch.exp(log_std)
-            dist = torch.distributions.Normal(mean, std)
-            action = dist.sample()
-            action_logprob = dist.log_prob(action).sum(dim=-1)
+            mean = self.policy_old(state)  # Get mean from the policy network
+            log_std = self.policy_old.log_std # Get log_std from the policy network
+            std = torch.exp(log_std) #calculate state devation
+            dist = torch.distributions.Normal(mean, std)  # Create normal distribution with mean and std
+            action = dist.sample() #sample action
+            action_logprob = dist.log_prob(action).sum(dim=-1) # Compute log probability
         return action.squeeze(0).numpy().reshape(11, 3), action_logprob.item()
 
     def train(self, memory):
