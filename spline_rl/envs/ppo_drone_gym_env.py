@@ -12,6 +12,7 @@ from rotorpy.world import World
 import math
 import os
 import csv
+from datetime import datetime
 
 class Wall_Hitting_Drone_Env(gym.Env):
     def __init__(self, quad_params, world, trajectory_length=501, render_mode=None):
@@ -39,7 +40,7 @@ class Wall_Hitting_Drone_Env(gym.Env):
         })
 
         # Define the action space (trajectory control points)
-        self.action_space = gym.spaces.Box(low=-10, high=10, shape=(11, 6), dtype=np.float32)
+        self.action_space = gym.spaces.Box(low=-10, high=10, shape=(6, 3), dtype=np.float32)
 
         self.trajectory_length = trajectory_length
         self.trajectory_idx = 0
@@ -118,12 +119,13 @@ class ValueNetwork(nn.Module):
         self.fc3 = nn.Linear(128, 1)  # Final fully connected layer for value estimation
         
 class PPOAgent:
-    def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.99, eps_clip=0.2, k_epochs=10):
+    def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.99, eps_clip=0.2, k_epochs=25):
          # Policy network initialization
         self.policy = PolicyNetwork(state_dim, action_dim)  # Initialize policy network
         self.policy_old = PolicyNetwork(state_dim, action_dim)  # Initialize old policy network
         self.policy_old.load_state_dict(self.policy.state_dict())  # Load policy parameters into the old policy
         self.value = ValueNetwork(state_dim)  # Initialize value network
+        self.action_dim = action_dim  # Action dimension
         
         # Optimizers for policy and value networks
         self.optimizer_policy = optim.Adam(self.policy.parameters(), lr=lr)
@@ -147,12 +149,14 @@ class PPOAgent:
             dist = torch.distributions.Normal(mean, std)  # Create normal distribution with mean and std
             action = dist.sample() #sample action
             action_logprob = dist.log_prob(action).sum(dim=-1) # Compute log probability
-        return action.squeeze(0).numpy().reshape(11, 3), action_logprob.item()
+        return action.squeeze(0).numpy().reshape(int(self.action_dim/3), 3), action_logprob.item()
 
     def train(self, memory):
         rewards = []
         discounted_reward = 0
-        for reward, is_terminal in zip(reversed(memory.rewards), reversed(memory.is_terminals)):
+        for reward, is_truncated in zip(reversed(memory.rewards), reversed(memory.is_truncated)):
+            if is_truncated:
+                discounted_reward = 0
             discounted_reward = reward + (self.gamma * discounted_reward)
             rewards.insert(0, discounted_reward)
         
@@ -173,12 +177,19 @@ class PPOAgent:
             surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
             
             loss = -torch.min(surr1, surr2) + 0.5 * self.loss_fn(state_values, rewards) - 0.01 * dist_entropy
+
+            policy_loss = -torch.min(surr1, surr2).mean()
+            value_loss = self.loss_fn(state_values, rewards)
+            entropy_loss = -dist_entropy.mean()
+            loss = policy_loss + 0.5 * value_loss + 0.01 * entropy_loss
             
             self.optimizer_policy.zero_grad()
             self.optimizer_value.zero_grad()
             loss.mean().backward()
             self.optimizer_policy.step()
             self.optimizer_value.step()
+
+            print(f"Epoch {_}: Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}, Entropy Loss: {entropy_loss.item()}")
             
         self.policy_old.load_state_dict(self.policy.state_dict())
 
@@ -211,6 +222,7 @@ class Memory:
         self.logprobs = []  # List to store log probabilities
         self.rewards = []  # List to store rewards
         self.is_terminals = []  # List to store terminal flags
+        self.is_truncated = []
 
     def clear_memory(self): #clear all memory buffer
         del self.states[:]
@@ -218,6 +230,7 @@ class Memory:
         del self.logprobs[:]
         del self.rewards[:]
         del self.is_terminals[:]
+        del self.is_truncated[:]
 
 def calculate_trajectory_orientation_velocity_acceleration(b_splined_trajectory):
     directions = np.diff(b_splined_trajectory, axis=0)
@@ -292,16 +305,20 @@ if __name__ == "__main__":
     world = World(world_map) #create world object
 
     state_dim = 13  # Dimension of state representation
-    action_dim = 33  # 11 points * 3 dimensions for trajectory
+    action_dim = 18  # 11 points * 3 dimensions for trajectory
 
     env = Wall_Hitting_Drone_Env(quadrotor_params, world, 501, render_mode=None)
-    agent = PPOAgent(state_dim=state_dim, action_dim=33)  # action_dim should be 11 * 3 = 33
+    agent = PPOAgent(state_dim=state_dim, action_dim=action_dim)
 
     memory = Memory() #initialize memory
     num_episodes = 100000 
     rewards_to_save = [] #list to store rewards
 
     controller = SE3Control(quadrotor_params) # Initialize the SE3 controller
+
+    # Save time to name the directories
+    now = datetime.now()
+    current_time = now.strftime("%Y-%m-%d_%H-%M-%S")
 
     for episode in range(num_episodes):
         state = env.reset() #reset the environment
@@ -310,11 +327,13 @@ if __name__ == "__main__":
         
         # Generate the trajectory using the policy
         trajectory, action_logprob = agent.select_action(state)
+        traj = np.copy(trajectory)
+        traj = np.insert(traj, 0, state['x'], axis=0)
         
         # Create b-spline from trajectory
-        t = np.linspace(0, 5, 11)
+        t = np.linspace(0, 5, 7)
         t_new = np.linspace(0, 5, 501)
-        b_splined_trajectory = [make_interp_spline(t, trajectory[:, i], k=3)(t_new) for i in range(trajectory.shape[1])]
+        b_splined_trajectory = [make_interp_spline(t, traj[:, i], k=3)(t_new) for i in range(trajectory.shape[1])]
         b_splined_trajectory = np.array(b_splined_trajectory).T
 
         # Calculate orientation, velocity, and acceleration of the trajectory
@@ -329,7 +348,8 @@ if __name__ == "__main__":
             memory.actions.append(trajectory.flatten())
             memory.logprobs.append(action_logprob)
             memory.rewards.append(reward)
-            memory.is_terminals.append(truncated or terminated)
+            memory.is_terminals.append(terminated)
+            memory.is_truncated.append(truncated)
             
             state = next_state
             total_reward += reward
@@ -345,9 +365,9 @@ if __name__ == "__main__":
 
         # Save models, trajectory and rewards every 100 episodes
         if (episode + 1) % 100 == 0:
-            save_models(agent.policy, agent.value, episode + 1)
-            save_trajectory(b_splined_trajectory, episode + 1, 'trajectories.csv')
-            save_rewards(rewards_to_save, 'rewards.csv')
+            save_models(agent.policy, agent.value, episode + 1, f"ppo_rl_{current_time}")
+            save_trajectory(b_splined_trajectory, episode + 1, f"ppo_rl_{current_time}/trajectories.csv")
+            save_rewards(rewards_to_save, f"ppo_rl_{current_time}/rewards.csv")
             mean_reward = np.mean([reward for _, reward in rewards_to_save])
             if mean_reward > 250:
                 break

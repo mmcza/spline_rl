@@ -7,37 +7,9 @@ from rotorpy.controllers.quadrotor_control import SE3Control
 from rotorpy.learning.quadrotor_environments import QuadrotorEnv
 from rotorpy.world import World
 from spline_rl.envs.ppo_drone_gym_env import Wall_Hitting_Drone_Env, calculate_trajectory_orientation_velocity_acceleration, trajectory_to_dict
+from spline_rl.envs.ppo_drone_gym_env import PolicyNetwork, ValueNetwork
 from scipy.interpolate import make_interp_spline
 from scipy.spatial.transform import Rotation as R
-
-# Define the PolicyNetwork and ValueNetwork classes
-# Define the PolicyNetwork and ValueNetwork classes
-class PolicyNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim):
-        super(PolicyNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.mean = nn.Linear(128, action_dim)
-        self.log_std = nn.Parameter(torch.zeros(action_dim))
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        mean = self.mean(x)
-        return mean
-
-class ValueNetwork(nn.Module):
-    def __init__(self, state_dim):
-        super(ValueNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 1)
-        
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        value = self.fc3(x)
-        return value.view(-1, 1)
 
 def get_latest_model(model_dir='models', model_type='policy'):
     model_files = [f for f in os.listdir(model_dir) if f.startswith(model_type) and f.endswith('.pth')]
