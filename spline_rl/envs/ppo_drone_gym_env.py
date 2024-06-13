@@ -206,13 +206,13 @@ class PPOAgent:
 
 class Memory:
     def __init__(self):
-        self.states = []
-        self.actions = []
-        self.logprobs = []
-        self.rewards = []
-        self.is_terminals = []
+        self.states = []  # List to store states
+        self.actions = []  # List to store actions
+        self.logprobs = []  # List to store log probabilities
+        self.rewards = []  # List to store rewards
+        self.is_terminals = []  # List to store terminal flags
 
-    def clear_memory(self):
+    def clear_memory(self): #clear all memory buffer
         del self.states[:]
         del self.actions[:]
         del self.logprobs[:]
@@ -257,23 +257,30 @@ def trajectory_to_dict(trajectory, yaw_angles, linear_speeds, linear_acceleratio
 
 
 def save_models(policy, value, episode, save_dir='models'):
+    #saves policy and value models to files.
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     torch.save(policy.state_dict(), os.path.join(save_dir, f'policy_model_{episode}.pth'))
     torch.save(value.state_dict(), os.path.join(save_dir, f'value_model_{episode}.pth'))
 
 def save_trajectory(trajectory, episode, file_path='trajectories.csv'):
+    #Saves trajectory points to a CSV file.
+    #trajectory array containing trajectory points.
+    #episode episode number used for identifying the trajectory in the CSV file.
+    #file_path file path where trajectories will be saved. Defaults to 'trajectories.csv'.
     with open(file_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         for point in trajectory:
             writer.writerow([episode, *point])
 
 def save_rewards(rewards, file_path='rewards.csv'):
+    #Saves rewards to a CSV file.
     with open(file_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         writer.writerows(rewards)
 
 def initialize_trajectory_file(file_path='trajectories.csv'):
+     #Initializes a CSV file for storing trajectories with a header row.
     with open(file_path, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['Episode', 'X', 'Y', 'Z']) 
@@ -281,8 +288,8 @@ def initialize_trajectory_file(file_path='trajectories.csv'):
 # Main Training Loop
 if __name__ == "__main__":
     quadrotor_params = quad_params
-    world_map = {"bounds": {"extents": [-10., 10., -10., 10., -10, 10.]}}
-    world = World(world_map)
+    world_map = {"bounds": {"extents": [-10., 10., -10., 10., -10, 10.]}} #  # World boundaries 
+    world = World(world_map) #create world object
 
     state_dim = 13  # Dimension of state representation
     action_dim = 33  # 11 points * 3 dimensions for trajectory
@@ -290,14 +297,14 @@ if __name__ == "__main__":
     env = Wall_Hitting_Drone_Env(quadrotor_params, world, 501, render_mode=None)
     agent = PPOAgent(state_dim=state_dim, action_dim=33)  # action_dim should be 11 * 3 = 33
 
-    memory = Memory()
-    num_episodes = 100000
-    rewards_to_save = []
+    memory = Memory() #initialize memory
+    num_episodes = 100000 
+    rewards_to_save = [] #list to store rewards
 
-    controller = SE3Control(quadrotor_params)
+    controller = SE3Control(quadrotor_params) # Initialize the SE3 controller
 
     for episode in range(num_episodes):
-        state = env.reset()
+        state = env.reset() #reset the environment
         total_reward = 0
         done = False
         
@@ -315,9 +322,9 @@ if __name__ == "__main__":
         
         while not done:
             next_point = trajectory_to_dict(b_splined_trajectory, yaw_angles, linear_speeds, linear_accelerations, yaw_rates, yaw_accelerations, env.trajectory_idx)
-            action = controller.update(env.trajectory_idx * env.Tp, state, next_point)
-            next_state, reward, truncated, terminated = env.step(action['cmd_motor_speeds'])
-            
+            action = controller.update(env.trajectory_idx * env.Tp, state, next_point)  # Update action using SE3 controller
+            next_state, reward, truncated, terminated = env.step(action['cmd_motor_speeds']) #execute action 
+            # Store experience in memory
             memory.states.append(agent._flatten_state(state).numpy())
             memory.actions.append(trajectory.flatten())
             memory.logprobs.append(action_logprob)
