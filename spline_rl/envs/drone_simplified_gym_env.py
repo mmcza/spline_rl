@@ -88,7 +88,7 @@ class Wall_Hitting_Drone_Env(gym.Env):
             self.reward_given = True
             return 100
         else: 
-            return -np.linalg.norm(state[0] - 5.0) * 0.01
+            return -np.exp(5.0 - state[0]) * 0.001
 
 
 class TrajectoryGenerator(nn.Module):
@@ -123,8 +123,9 @@ class Agent:
 
         self.optimizer.zero_grad()
         predicted_action = self.model(state)
-        loss = self.loss_fn(predicted_action, action)
-        loss.backward()
+        #loss = self.loss_fn(predicted_action, action)
+        loss = -torch.sum(reward)
+        # loss.backward()
         self.optimizer.step()
 
     def _flatten_state(self, state):
