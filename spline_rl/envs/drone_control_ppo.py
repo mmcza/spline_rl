@@ -38,8 +38,15 @@ class CustomQuadrotorEnv(QuadrotorEnv):
             pitch = euler_angles[0]
             print("Success!")
             return 500 - np.exp(state[4]-5.0) * 0.001 - np.exp(abs(pitch)) * 0.05 - np.exp(abs(state[10])) * 0.01
-        else: 
-            return -np.exp(5.0 - state[0]) * 0.001
+        else:
+            if self.rewarded:
+                return 0
+            else:
+                if state[0] < -5:
+                    x = -5
+                else:
+                    x = state[0]
+                return -np.exp(5.0 - x) * 0.001 
 
 world_map = {"bounds": {"extents": [-10., 10., -10., 10., -10, 10.]}}
 world = World(world_map)
@@ -47,7 +54,7 @@ world = World(world_map)
 env = CustomQuadrotorEnv(
     control_mode ='cmd_motor_speeds', 
     quad_params = quad_params,
-    max_time = 3,
+    max_time = 5,
     world = world,
     sim_rate = 100,
     render_mode='None'
