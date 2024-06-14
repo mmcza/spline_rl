@@ -19,8 +19,8 @@ def get_latest_model(model_dir='models', model_type='policy'):
     latest_model_file = max(model_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
     return os.path.join(model_dir, latest_model_file)
 
-def load_models(policy, value, policy_model_file, value_model_file):
-    policy.load_state_dict(torch.load(policy_model_file))
+def load_models(policy, value, policy_model_file, value_model_file)
+    policy.load_state_dict(torch.load(policy_model_file))     # Function to load the policy and value models from the specified files
     value.load_state_dict(torch.load(value_model_file))
     policy.float()  # Ensure the policy model is in float32
     value.float()   # Ensure the value model is in float32
@@ -35,9 +35,9 @@ def flatten_state(state):
     return torch.tensor(flat_state, dtype=torch.float32)  # Ensure float32 dtype
 
 def main():
-    quadrotor_params = quad_params
+    quadrotor_params = quad_params  # Load quadrotor parameters
     world_map = {"bounds": {"extents": [-10., 10., -10., 10., -10, 10.]}}
-    world = World(world_map)
+    world = World(world_map) #create world
 
     # Load the environment
     env = Wall_Hitting_Drone_Env(quadrotor_params, world, 501, render_mode='3D')
@@ -58,12 +58,12 @@ def main():
     policy.eval()
 
     # Experiment with the loaded model
-    state = env.reset()
+    state = env.reset() # Reset the environment to get the initial state
     total_reward = 0
     done = False
-    controller = SE3Control(quadrotor_params)
+    controller = SE3Control(quadrotor_params) #Initialize the SE3 controller
     
-    with torch.no_grad():
+    with torch.no_grad(): # Disable gradient calculation for evaluation
         while not done:
             state_tensor = flatten_state(state).unsqueeze(0)
             trajectory = policy(state_tensor).squeeze(0).numpy().reshape(11, 3)
@@ -76,14 +76,14 @@ def main():
             
             # Calculate orientation, velocity, and acceleration of the trajectory
             yaw_angles, linear_speeds, linear_accelerations, yaw_rates, yaw_accelerations = calculate_trajectory_orientation_velocity_acceleration(b_splined_trajectory)
-            
+             # Get the next point in the trajectory
             next_point = trajectory_to_dict(b_splined_trajectory, yaw_angles, linear_speeds, linear_accelerations, yaw_rates, yaw_accelerations, env.trajectory_idx)
-            action = controller.update(env.trajectory_idx * env.Tp, state, next_point)
+            action = controller.update(env.trajectory_idx * env.Tp, state, next_point)     # Update the controller and get the action
             next_state, reward, truncated, terminated = env.step(action['cmd_motor_speeds'])
             
-            state = next_state
-            total_reward += reward
-            
+            state = next_state  # Update the state
+            total_reward += reward #accumulate the reward
+             # Check if the episode has ended
             if truncated or terminated:
                 done = True
     
