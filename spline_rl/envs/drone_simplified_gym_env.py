@@ -10,7 +10,7 @@ from rotorpy.controllers.quadrotor_control import SE3Control
 from rotorpy.learning.quadrotor_environments import QuadrotorEnv
 from rotorpy.world import World
 import math
-
+#custom the environment
 class Wall_Hitting_Drone_Env(gym.Env):
     def __init__(self, quad_params, world, trajectory_length=501, render_mode=None):
         super(Wall_Hitting_Drone_Env, self).__init__()
@@ -45,6 +45,7 @@ class Wall_Hitting_Drone_Env(gym.Env):
         self.reward_given = False
 
     def reset(self, trajectory=None):
+        # Reset environment to initial state
         self.state = self._generate_initial_state()
         self.trajectory_idx = 0
         self.reward_given = False
@@ -56,10 +57,10 @@ class Wall_Hitting_Drone_Env(gym.Env):
 
         # Update the internal state representation
         self.state = {
-            'x': observation[:3],
-            'v': observation[3:6],
-            'q': observation[6:10],
-            'w': observation[10:13]
+            'x': observation[:3], #position
+            'v': observation[3:6], #velocity
+            'q': observation[6:10], #Quaternion
+            'w': observation[10:13] #angular velocity
         }
 
         self.trajectory_idx += 1
@@ -74,6 +75,7 @@ class Wall_Hitting_Drone_Env(gym.Env):
         return self.state, reward, terminated, truncated
 
     def _generate_initial_state(self):
+         # Generate the initial state of the environment
         state = self.env.reset()
         return {
             'x': state[0][:3],
@@ -92,6 +94,7 @@ class Wall_Hitting_Drone_Env(gym.Env):
 
 
 class TrajectoryGenerator(nn.Module):
+    # Neural network for trajectory generation
     def __init__(self, input_dim, output_dim):
         super(TrajectoryGenerator, self).__init__()
         self.fc1 = nn.Linear(input_dim, 128)
@@ -102,33 +105,35 @@ class TrajectoryGenerator(nn.Module):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
-        return x.view(-1, 11, 3)
-
+        return x.view(-1, 11, 3) # Reshape output to match the trajectory points
+# Agent class to interact with the environment
 class Agent:
     def __init__(self, state_dim, action_dim):
         self.model = TrajectoryGenerator(state_dim, action_dim)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001) 
         self.loss_fn = nn.MSELoss()
 
     def generate_trajectory(self, state):
-        state = torch.tensor(self._flatten_state(state), dtype=torch.float32).unsqueeze(0)
-        with torch.no_grad():
-            control_points = self.model(state)
+        state = torch.tensor(self._flatten_state(state), dtype=torch.float32).unsqueeze(0)    # Flatten state and convert to tensor
+        with torch.no_grad():  # Generate control points using the model
+            control_points = self.model(state) 
         return control_points.squeeze(0).numpy()
 
     def train(self, state, action, reward):
+         # Flatten state and convert to tensor
         state = torch.tensor(self._flatten_state(state), dtype=torch.float32).unsqueeze(0)
         action = torch.tensor(action, dtype=torch.float32).unsqueeze(0)
         reward = torch.tensor(reward, dtype=torch.float32).unsqueeze(0)
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad() 
         predicted_action = self.model(state)
         #loss = self.loss_fn(predicted_action, action)
-        loss = -torch.sum(reward)
+        loss = -torch.sum(reward) # Define loss as negative reward to maximize it
         # loss.backward()
-        self.optimizer.step()
+        self.optimizer.step()  # Compute gradients and perform optimization step
 
     def _flatten_state(self, state):
+          # Flatten the state dictionary into a single array
         flat_state = np.concatenate([
             state['x'],
             state['q'],
@@ -219,11 +224,13 @@ if __name__ == "__main__":
         total_reward = 0
 
         while not done:
+             # Get the next point in the trajectory
             next_point = trajectory_to_dict(b_splined_trajectory, yaw_angles, linear_speeds, linear_accelerations, yaw_rates, yaw_accelerations, env.trajectory_idx)
+             # Update the controller and get the action
             action = controller.update(env.trajectory_idx * env.Tp, state, next_point)
             # print(action)
             next_state, reward, truncated, terminated = env.step(action['cmd_motor_speeds'])
-            if truncated or terminated:
+            if truncated or terminated:    # Check if the episode has ended
                 done = True
             total_reward += reward
             state = next_state
