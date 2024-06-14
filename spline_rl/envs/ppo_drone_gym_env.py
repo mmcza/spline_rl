@@ -120,10 +120,11 @@ class ValueNetwork(nn.Module):
         self.fc3 = nn.Linear(128, 1)  # Final fully connected layer for value estimation
         
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        value = self.fc3(x)
-        return value.view(-1, 1)
+           # Forward pass through the network
+        x = torch.relu(self.fc1(x))  # Apply ReLU activation to the output of the first layer
+        x = torch.relu(self.fc2(x))  # Apply ReLU activation to the output of the second layer
+        value = self.fc3(x)  # Output the value estimate
+        return value.view(-1, 1) # Ensure the output has the shape (batch_size, 1)
 
 class PPOAgent:
     def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.99, eps_clip=0.2, k_epochs=10):
@@ -135,16 +136,16 @@ class PPOAgent:
         self.action_dim = action_dim  # Action dimension
         
         # Optimizers for policy and value networks
-        self.optimizer_policy = optim.Adam(self.policy.parameters(), lr=lr)
-        self.optimizer_value = optim.Adam(self.value.parameters(), lr=lr)
+        self.optimizer_policy = optim.Adam(self.policy.parameters(), lr=lr) # Optimizer for the policy network
+        self.optimizer_value = optim.Adam(self.value.parameters(), lr=lr) # Optimizer for the value network
         
         # Loss function (Mean Squared Error)
         self.loss_fn = nn.MSELoss()
         
         # PPO parameters
-        self.gamma = gamma
+        self.gamma = gamma # Discount factor for reward
         self.eps_clip = eps_clip
-        self.k_epochs = k_epochs
+        self.k_epochs = k_epochs # Number of epochs for PPO updates
 
     def select_action(self, state):
           # Flatten and convert state to tensor
@@ -159,35 +160,36 @@ class PPOAgent:
         return action.squeeze(0).numpy().reshape(int(self.action_dim/3), 3), action_logprob.item()
 
     def train(self, memory):
+          # Compute discounted rewards
         rewards = []
         discounted_reward = 0
         for reward, is_truncated in zip(reversed(memory.rewards), reversed(memory.is_truncated)):
             if is_truncated:
-                discounted_reward = 0
+                discounted_reward = 0 # Reset discounted reward if episode was truncated
             discounted_reward = reward + (self.gamma * discounted_reward)
             rewards.insert(0, discounted_reward)
-        
+           # Convert rewards to a tensor and normalize 
         rewards = torch.tensor(rewards, dtype=torch.float32).view(-1, 1)  # Ensure (batch_size, 1)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
-        
+        # Convert memory data to tensors
         old_states = torch.tensor(np.array(memory.states), dtype=torch.float32)
         old_actions = torch.tensor(np.array(memory.actions), dtype=torch.float32)
         old_logprobs = torch.tensor(np.array(memory.logprobs), dtype=torch.float32)
-        
+          # Perform multiple epochs of optimization (PPO)
         for _ in range(self.k_epochs):
-            logprobs, state_values, dist_entropy = self.evaluate(old_states, old_actions)
-            
+            logprobs, state_values, dist_entropy = self.evaluate(old_states, old_actions)  # Evaluate old actions and states
+             # Compute ratios for policy update
             ratios = torch.exp(logprobs - old_logprobs.detach())
             advantages = rewards - state_values.detach()
-            
+            #loss functions
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
-
+            # Compute policy loss, value loss, and entropy loss
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = self.loss_fn(state_values, rewards)
             entropy_loss = -dist_entropy.mean()
-            loss = policy_loss + 0.5 * value_loss + 0.01 * entropy_loss
-            
+            loss = policy_loss + 0.5 * value_loss + 0.01 * entropy_loss #total loss
+              # Backpropagation and optimization step
             self.optimizer_policy.zero_grad()
             self.optimizer_value.zero_grad()
             loss.mean().backward()
@@ -195,30 +197,32 @@ class PPOAgent:
             self.optimizer_value.step()
 
             print(f"Epoch {_}: Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}, Entropy Loss: {entropy_loss.item()}")
-            
+            # Update the old policy network with new policy parameters    
         self.policy_old.load_state_dict(self.policy.state_dict())
 
     def evaluate(self, state, action):
+         # Evaluate the policy network and compute state values
         state_value = self.value(state)
-        
+         # Get mean and std from the policy network to form a normal distribution
         mean = self.policy(state)
         log_std = self.policy.log_std
         std = torch.exp(log_std)
         dist = torch.distributions.Normal(mean, std)
-        
+      # Compute log probabilities and entropy of the distribution
         action_logprobs = dist.log_prob(action).sum(dim=-1)
         dist_entropy = dist.entropy().sum(dim=-1)
         
         return action_logprobs, state_value, dist_entropy
     
     def _flatten_state(self, state):
+           # Flatten the state dictionary into a single array
         flat_state = np.concatenate([
             state['x'],
             state['q'],
             state['v'],
             state['w'],
         ])
-        return torch.tensor(flat_state, dtype=torch.float32)
+        return torch.tensor(flat_state, dtype=torch.float32) # Convert the flattened state to a tensor
 
 class Memory:
     def __init__(self):
