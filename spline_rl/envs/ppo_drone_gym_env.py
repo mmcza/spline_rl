@@ -92,6 +92,7 @@ class Wall_Hitting_Drone_Env(gym.Env):
             quaternion = state[6:10]
             euler_angles = R.from_quat(quaternion).as_euler('xyz', degrees=False)
             pitch = euler_angles[0]
+            print("Success!")
             return 500 - np.exp(state[4]-5.0) * 0.001 - np.exp(abs(pitch)) * 0.05 - np.exp(abs(state[10])) * 0.01
         else: 
             return -np.exp(5.0 - state[0]) * 0.001
@@ -118,8 +119,14 @@ class ValueNetwork(nn.Module):
         self.fc2 = nn.Linear(128, 128)  # Second fully connected layer
         self.fc3 = nn.Linear(128, 1)  # Final fully connected layer for value estimation
         
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        value = self.fc3(x)
+        return value.view(-1, 1)
+
 class PPOAgent:
-    def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.99, eps_clip=0.2, k_epochs=25):
+    def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.99, eps_clip=0.2, k_epochs=10):
          # Policy network initialization
         self.policy = PolicyNetwork(state_dim, action_dim)  # Initialize policy network
         self.policy_old = PolicyNetwork(state_dim, action_dim)  # Initialize old policy network
@@ -175,8 +182,6 @@ class PPOAgent:
             
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
-            
-            loss = -torch.min(surr1, surr2) + 0.5 * self.loss_fn(state_values, rewards) - 0.01 * dist_entropy
 
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = self.loss_fn(state_values, rewards)
